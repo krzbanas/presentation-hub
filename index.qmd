@@ -1,0 +1,22 @@
+---
+title: "My Slide Decks"
+listing:
+  contents: presentations/*/index.qmd
+  sort: "date desc"
+  type: grid
+  categories: true
+---
+
+Welcome to my presentation repository. Use the categories on the right to filter by topic.
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  setTimeout(function() {
+    const links = document.querySelectorAll('.quarto-listing-container a, .listing-item a');
+    links.forEach(function(link) {
+      link.setAttribute('target', '_blank');
+      link.setAttribute('rel', 'noopener noreferrer');
+    });
+  }, 100);
+});
+</script>

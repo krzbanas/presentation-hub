@@ -1,0 +1,488 @@
+---
+title: "AI-Driven Spectroscopy: Automating Feature Extraction, Clustering and Chemical Mapping"
+subtitle: "Accelerating Insights in OPTIR and FTIR Data"
+author: "Presenter Name"
+date: today
+format:
+  revealjs:
+    theme: [default, custom.scss]
+    slide-number: true
+    chalkboard: false
+    preview-links: auto
+    transition: slide
+    background-transition: fade
+    width: 1280
+    height: 720
+    margin: 0.05
+    center: true
+    hash-type: number
+    footer: "AI-Driven Spectroscopy | Feature Extraction, Clustering & Mapping"
+    logo: ""
+    title-slide-attributes:
+      data-background-image: "img/title_background.png"
+      data-background-size: "cover"
+      data-background-opacity: "0.3"
+    auto-animate: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(knitr)
+```
+
+<!-- ============================================================ -->
+<!-- SECTION 1: INTRODUCTION (approx. 5 minutes)                  -->
+<!-- ============================================================ -->
+
+# Introduction {background-color="#2c3e50" background-image="img/intro_section.png" background-size="cover" background-opacity="0.2"}
+
+::: {.notes}
+Welcome everyone. Over the next 25 minutes, we will explore how artificial intelligence is fundamentally changing how we process vibrational spectroscopy data. Specifically, we will look at how automating feature extraction, clustering, and chemical mapping is helping us overcome the massive data bottlenecks in modern FTIR and OPTIR spectroscopy.
+:::
+
+## The Data Bottleneck {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="60%"}
+
+- Modern spectroscopy generates **massive, high-dimensional** datasets
+
+- Hyperspectral imaging produces **millions of spectra** per sample
+
+- Manual peak picking and analysis are **no longer scalable**
+
+- AI/ML models are essential for **automating extraction, clustering, and mapping**
+
+:::
+
+::: {.column width="40%"}
+
+![](img/spectroscopy_ai_convergence.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+::: {.notes}
+Let me start by framing why this conversation is urgent. Spectroscopic techniques like FTIR and OPTIR produce datasets with hundreds or thousands of variables per measurement. When we move to hyperspectral imaging, we are dealing with millions of spectra. Manual analysis—looking at individual peaks—is impossible at this scale. We need automated pipelines to extract features, group similar spectra, and map them back to the physical sample. Estimated time: 2 minutes.
+:::
+
+## FTIR Spectroscopy — A Brief Primer {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+**Fourier Transform Infrared Spectroscopy**
+
+- Measures absorption of infrared light by molecular bonds
+
+- Produces a spectrum: **absorbance vs. wavenumber** (typically 4000–400 cm⁻¹)
+
+- Functional group identification via characteristic bands (C=O, O–H, N–H, C–H)
+
+- Widely used in **pharmaceuticals, polymers, food science, forensics**
+
+:::
+
+::: {.column width="45%"}
+
+![](img/ftir_schematic.png){fig-align="center" width="95%"}
+
+:::
+
+::::
+
+::: {.notes}
+For those less familiar, FTIR spectroscopy works by passing broadband infrared light through or reflecting it off a sample. Molecular bonds absorb at characteristic frequencies, producing a fingerprint spectrum. Each peak or band corresponds to a specific vibrational mode. This technique has been a workhorse of analytical chemistry for decades, and it generates the kind of structured, high-dimensional data that is very amenable to machine learning approaches. Estimated time: 1.5 minutes.
+:::
+
+## OPTIR Spectroscopy — The Spatial Revolution {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+**Optical Photothermal Infrared Spectroscopy**
+
+- Overcomes the **diffraction limit** of conventional IR microscopy
+
+- Achieves spatial resolution of **~500 nm** (vs. ~10 µm for FTIR microscopy)
+
+- Generates **high-resolution hyperspectral maps**
+
+- Ideal for **biological tissues, single cells, microplastics, thin films**
+
+- **The Challenge:** Exponential increase in data volume and complexity
+
+:::
+
+::: {.column width="45%"}
+
+![](img/optir_schematic.png){fig-align="center" width="95%"}
+
+:::
+
+::::
+
+::: {.notes}
+OPTIR, or Optical Photothermal Infrared spectroscopy, is a more recent technique that has generated enormous excitement. By decoupling the excitation wavelength from the detection wavelength, it achieves submicron spatial resolution while still providing IR-quality chemical information. This means we can now collect spatially resolved IR spectra from individual cells or nanoscale material domains. However, this spatial revolution creates a data processing nightmare. The data volumes are significantly larger than conventional FTIR, making AI-assisted mapping and clustering not just useful but essential. Estimated time: 1.5 minutes.
+:::
+
+<!-- ============================================================ -->
+<!-- SECTION 2: AUTOMATING FEATURE EXTRACTION (approx. 6 minutes) -->
+<!-- ============================================================ -->
+
+# Automating Feature Extraction {background-color="#8e44ad" background-image="img/history_section.png" background-size="cover" background-opacity="0.2"}
+
+::: {.notes}
+Let us now look at the first step in our automated pipeline: feature extraction. How do we reduce a spectrum of thousands of wavenumbers into the most critical, defining chemical features without losing vital information?
+:::
+
+## The Evolution of Spectral Analysis {auto-animate="true"}
+
+```{r}
+#| label: timeline-plot
+#| fig-width: 11
+#| fig-height: 4.5
+#| fig-align: center
+
+library(ggplot2)
+
+timeline_data <- data.frame(
+  year = c(1960, 1985, 2000, 2012, 2018, 2023),
+  event = c(
+    "Manual Peak
+Picking",
+    "PCA & Factor
+Analysis",
+    "Automated Baseline
+Correction",
+    "Deep Autoencoders
+for Compression",
+    "CNNs for Feature
+Extraction",
+    "Transformer-based
+Spectral Embeddings"
+  ),
+  era = c("Manual", "Chemometrics", "Algorithmic", "Deep Learning",
+           "Deep Learning", "Deep Learning")
+)
+
+ggplot(timeline_data, aes(x = year, y = 0)) +
+  geom_segment(aes(x = 1955, xend = 2026, y = 0, yend = 0),
+               color = "grey60", linewidth = 1) +
+  geom_point(aes(color = era), size = 5) +
+  geom_text(aes(label = event, y = ifelse(seq_along(year) %% 2 == 0, -0.15, 0.15)),
+            size = 3.2, lineheight = 0.9, fontface = "bold") +
+  geom_segment(aes(xend = year,
+                    y = ifelse(seq_along(year) %% 2 == 0, -0.05, 0.05),
+                    yend = 0),
+               color = "grey40", linetype = "dashed") +
+  scale_color_manual(values = c("Manual" = "#3498db",
+                                 "Chemometrics" = "#2ecc71",
+                                 "Algorithmic" = "#e67e22",
+                                 "Deep Learning" = "#e74c3c")) +
+  scale_x_continuous(breaks = timeline_data$year) +
+  ylim(-0.35, 0.35) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    axis.text.x = element_text(size = 9, angle = 45, hjust = 1)
+  ) +
+  labs(title = "")
+```
+
+::: {.notes}
+This timeline shows how our approach to feature extraction has evolved. We started with manual peak picking, moved to classical chemometrics like PCA in the 80s, and developed algorithmic baseline corrections. Today, we are in the deep learning era, using autoencoders and CNNs to automatically extract hierarchical features from raw spectra, bypassing the need for tedious manual preprocessing. Estimated time: 2 minutes.
+:::
+
+## Dimensionality Reduction Techniques {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Classical vs. Modern
+
+- **PCA (Principal Component Analysis)**: Linear, interpretable, captures global variance.
+
+- **t-SNE & UMAP**: Non-linear, excellent for visualizing complex spectral manifolds.
+
+- **Autoencoders**: Neural networks that learn compressed, latent representations of spectra.
+
+**Goal**: Reduce noise, isolate chemical variance, and prepare data for clustering.
+
+:::
+
+::: {.column width="50%"}
+
+![](img/chemometrics_loadings.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+::: {.notes}
+Feature extraction is fundamentally about dimensionality reduction. PCA remains a gold standard because it is linear and interpretable—the loadings tell us exactly which wavenumbers drive the variance. However, modern techniques like UMAP and Autoencoders are incredibly powerful for non-linear data, allowing us to compress complex spectral signatures into a few latent variables that perfectly capture the chemical essence of the sample. Estimated time: 2 minutes.
+:::
+
+<!-- ============================================================ -->
+<!-- SECTION 3: CLUSTERING SPECTRAL DATA (approx. 6 minutes)      -->
+<!-- ============================================================ -->
+
+# Unsupervised Clustering {background-color="#c0392b" background-image="img/blackbox_section.png" background-size="cover" background-opacity="0.2"}
+
+::: {.notes}
+Once we have extracted the key features, the next step in automation is clustering. How do we group hundreds of thousands of spectra into meaningful chemical domains without manually labeling them?
+:::
+
+## Finding Hidden Structures {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="60%"}
+
+**Clustering** groups spectra based on inherent similarities, requiring **no prior labels**.
+
+- **K-Means**: Fast, partitions data into distinct chemical regions.
+
+- **Hierarchical Clustering (HCA)**: Builds a dendrogram of spectral relationships.
+
+- **DBSCAN / HDBSCAN**: Density-based, excellent for finding rare anomalies (e.g., microplastic contaminants).
+
+### Why it matters:
+
+> *"Clustering allows the data to speak for itself, revealing subtle biochemical variations that a human analyst might miss."*
+
+:::
+
+::: {.column width="40%"}
+
+![](img/blackbox_diagram.png){fig-align="center" width="85%"}
+
+:::
+
+::::
+
+::: {.notes}
+Clustering is where the magic of automated discovery happens. By applying algorithms like K-Means or HDBSCAN to our extracted features, we group spectra based purely on their chemical similarity. This is an unsupervised process, meaning we don't need to tell the AI what to look for. It is incredibly powerful for discovering unexpected variations in biological tissues or identifying rare contaminants in environmental samples. Estimated time: 2 minutes.
+:::
+
+## From Clusters to Chemical Meaning {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Validating the Clusters
+
+1. **Centroid Analysis**: Extracting the mean spectrum of each cluster to identify the dominant chemical signature.
+
+2. **Biomarker Identification**: Comparing cluster centroids to known spectral libraries.
+
+3. **Anomaly Detection**: Isolating clusters with high variance or unique spectral bands.
+
+:::
+
+::: {.column width="50%"}
+
+![](img/spurious_correlation.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+::: {.notes}
+Of course, clustering is only useful if we can assign chemical meaning to the groups. We do this by analyzing the centroid—or average spectrum—of each cluster. By comparing these centroids against known spectral libraries, we can automatically label a cluster as "lipid-rich tissue," "protein aggregate," or "polystyrene." This bridges the gap between abstract mathematical grouping and concrete chemical analysis. Estimated time: 2 minutes.
+:::
+
+<!-- ============================================================ -->
+<!-- SECTION 4: CHEMICAL MAPPING (approx. 4 minutes)              -->
+<!-- ============================================================ -->
+
+# Chemical Mapping & Spatial Analysis {background-color="#27ae60" background-image="img/xai_section.png" background-size="cover" background-opacity="0.2"}
+
+::: {.notes}
+The final, and perhaps most visually impactful, step in this pipeline is chemical mapping. This is where we take our clustered data and project it back into physical space, which is especially critical for high-resolution OPTIR data.
+:::
+
+## Translating Spectra to Space {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+### Hyperspectral Imaging
+
+- Every pixel contains a **full IR spectrum**.
+
+- AI assigns each pixel to a **cluster** or predicts a **concentration**.
+
+- Generates high-contrast **false-color maps** of chemical distribution.
+
+### Applications in OPTIR:
+
+- Mapping drug distribution inside a single cell.
+
+- Identifying phase separation in polymer blends.
+
+- Visualizing protein secondary structure variations across tissue boundaries.
+
+:::
+
+::: {.column width="45%"}
+
+![](img/shap_spectrum.png){fig-align="center" width="95%"}
+
+:::
+
+::::
+
+::: {.notes}
+In hyperspectral imaging, every pixel is a full spectrum. Once our AI pipeline has extracted features and clustered the data, we simply map those cluster assignments back to their original X-Y coordinates. The result is a high-resolution, false-color chemical map. For OPTIR, this means we can visualize the exact distribution of a drug inside a single cell, or map the boundary between different polymer phases at the nanoscale, entirely automatically. Estimated time: 2 minutes.
+:::
+
+<!-- ============================================================ -->
+<!-- SECTION 5: CHALLENGES & VALIDATION (approx. 4 minutes)       -->
+<!-- ============================================================ -->
+
+# Challenges in Automated Pipelines {background-color="#d35400" background-image="img/ethics_section.png" background-size="cover" background-opacity="0.2"}
+
+::: {.notes}
+While automation is powerful, it is not without pitfalls. When we remove the human from the loop, we must be incredibly rigorous about validation and quality control.
+:::
+
+## Pitfalls of Automated Mapping {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+### What Can Go Wrong?
+
+- **Mapping Artifacts**: AI clustering based on baseline drift, scattering, or sample thickness rather than chemistry.
+
+- **Over-segmentation**: Finding clusters that represent noise rather than true chemical differences.
+
+- **Computational Bottlenecks**: Processing millions of spectra requires significant GPU resources and optimized code.
+
+### The Solution: Human-in-the-Loop
+
+- Implement robust **automated preprocessing** (e.g., EMSC, Savitzky-Golay).
+
+- Use **Explainable AI (XAI)** to verify that clusters are driven by meaningful IR bands.
+
+:::
+
+::: {.column width="45%"}
+
+![](img/bias_sources.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+::: {.notes}
+The biggest risk in automated mapping is that the AI clusters artifacts instead of chemistry. If a sample has varying thickness, the AI might group spectra based on overall absorbance intensity rather than molecular composition. This is why robust preprocessing—like Extended Multiplicative Signal Correction—is vital. Furthermore, we still need Explainable AI tools to verify that our automated clusters are actually driven by meaningful IR bands, like the Amide I or lipid carbonyl peaks, rather than baseline noise. Estimated time: 2 minutes.
+:::
+
+<!-- ============================================================ -->
+<!-- SECTION 6: CONCLUSIONS & RECOMMENDATIONS (approx. 2 minutes) -->
+<!-- ============================================================ -->
+
+# Conclusions & Recommendations {background-color="#2c3e50" background-image="img/conclusions_section.png" background-size="cover" background-opacity="0.2"}
+
+## Key Takeaways {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### The Pipeline
+
+1. **Feature Extraction**: Use PCA, UMAP, or Autoencoders to reduce dimensionality and isolate chemical variance.
+
+2. **Clustering**: Apply unsupervised algorithms (K-Means, HDBSCAN) to discover hidden chemical domains.
+
+3. **Mapping**: Project clustered data back into spatial coordinates for high-resolution OPTIR/FTIR imaging.
+
+:::
+
+::: {.column width="50%"}
+
+### Best Practices
+
+1. **Preprocess rigorously**: Garbage in, garbage out. Remove scattering and baseline artifacts first.
+
+2. **Validate clusters**: Always check cluster centroids against known spectral libraries.
+
+3. **Optimize for scale**: Utilize parallel processing and GPU acceleration for hyperspectral datasets.
+
+4. **Maintain transparency**: Ensure the features driving your maps are chemically sound.
+
+:::
+
+::::
+
+::: {.notes}
+To conclude, the transition from manual spectral analysis to AI-driven automation is not just a convenience; it is a necessity for modern techniques like OPTIR. By building robust pipelines for feature extraction, clustering, and chemical mapping, we can unlock insights that were previously buried in the data deluge. However, this automation must be paired with rigorous preprocessing and chemical validation to ensure our maps represent reality, not artifacts. Estimated time: 1.5 minutes.
+:::
+
+## Recommended Resources {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Software & Libraries
+
+- `scikit-learn` (Python) — Standard for PCA, K-Means, DBSCAN
+
+- `UMAP-learn` (Python) — Fast manifold learning
+
+- `Quasar` / `Orange` — Visual programming for spectroscopy
+
+- `hyperSpy` (Python) — Hyperspectral data analysis
+
+:::
+
+::: {.column width="50%"}
+
+### Key Papers
+
+- Baker et al. (2014) — *Using FTIR for clinical biofluids analysis*
+
+- Byrne et al. (2020) — *Chemometrics and machine learning in biospectroscopy*
+
+- Zhang et al. (2022) — *Deep learning for hyperspectral image classification*
+
+:::
+
+::::
+
+::: {.notes}
+Here are some resources for further reading and implementation. Python libraries like scikit-learn and hyperSpy are foundational for building these automated pipelines. For those who prefer visual interfaces, tools like Orange or Quasar are excellent starting points. Estimated time: 0.5 minutes.
+:::
+
+## Thank You for Your Attention {background-image="img/thank_you.png" background-size="cover" background-position="center" style="color: white; text-shadow: 3px 3px 10px black;"}
+
+### Questions & Discussion
+
+::: {.r-fit-text}
+📧 krzysztof@nus.edu.sg
+
+🔗 github.com/krzbanas/submic_2026
+:::
+
+::: {.notes}
+Thank you very much for your attention. I am happy to take questions. Whether you are interested in specific clustering algorithms, handling massive OPTIR datasets, or setting up your own automated pipelines, I welcome the discussion. Estimated time: remaining time for Q&A.
+:::

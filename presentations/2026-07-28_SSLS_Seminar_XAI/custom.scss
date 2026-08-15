@@ -1,0 +1,70 @@
+/*-- scss:defaults --*/
+
+$presentation-heading-color: #2c3e50;
+$body-color: #333;
+$link-color: #3498db;
+$code-block-bg: #f8f9fa;
+$code-block-border-color: #dee2e6;
+
+$presentation-font-size-root: 32px;
+$presentation-h1-font-size: 1.8em;
+$presentation-h2-font-size: 1.4em;
+$presentation-h3-font-size: 1.15em;
+
+/*-- scss:rules --*/
+
+.reveal .slide-number {
+  font-size: 0.7em;
+  color: #7f8c8d;
+}
+
+.reveal .footer {
+  font-size: 0.55em;
+  color: #95a5a6;
+}
+
+.reveal table {
+  font-size: 0.75em;
+}
+
+.reveal table th {
+  background-color: #2c3e50;
+  color: white;
+  font-weight: bold;
+  padding: 8px 12px;
+}
+
+.reveal table td {
+  padding: 6px 12px;
+}
+
+.reveal .slide-background-content {
+  opacity: 0.95;
+}
+
+.reveal section[data-background-color] h1,
+.reveal section[data-background-color] h2 {
+  color: white !important;
+  text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.reveal pre code {
+  font-size: 0.7em;
+  max-height: 450px;
+}
+
+.reveal .code-summary {
+  font-size: 0.75em;
+  color: #7f8c8d;
+}
+
+/* Notes styling */
+.reveal .speaker-notes {
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+/* Mermaid diagram sizing */
+.reveal .mermaid svg {
+  max-height: 500px;
+}

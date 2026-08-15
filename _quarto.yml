@@ -1,0 +1,19 @@
+project:
+  type: website
+  output-dir: docs
+  resources:
+    - .nojekyll
+
+execute:
+  freeze: auto
+  
+website:
+  title: "My Presentation Hub"
+  navbar:
+    left:
+      - text: "Home"
+        href: index.qmd
+        
+format:
+  html:
+    theme: cosmo

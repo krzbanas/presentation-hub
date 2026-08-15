@@ -1,0 +1,1146 @@
+---
+title: "Elemental Profiling of Oceanic and Non-oceanic Gerridae"
+subtitle: "Integrating Synchrotron XFM with Explainable AI"
+author: 
+  - name: "Krzysztof Banas"
+    affiliations: "Singapore Synchrotron Light Source"
+date: "17 June 2026"
+date-format: long
+categories: [EXRS, XRF, halobates, XAI]
+image: 2026_Catania.png
+format:
+  revealjs:
+    theme: [default, custom.scss]
+    slide-number: true
+    chalkboard: false
+    preview-links: auto
+    transition: slide
+    transition-speed: fast
+    navigation-mode: linear
+    controls: true
+    controls-layout: bottom-right
+    progress: true
+    hash-type: number
+    center: false
+    auto-stretch: true
+    code-fold: true
+    code-tools: true
+    code-line-numbers: true
+    highlight-style: monokai
+    fig-align: center
+    fig-responsive: true
+    width: 1920
+    height: 1080
+    margin: 0.05
+    footer: "EXRS 2026 · Catania, Italy"
+    logo: "img/ssls.png"
+    title-slide-attributes:
+      data-background-image: "img/title_bg.png"
+      data-background-size: cover
+      data-background-opacity: "0.3"
+execute:
+  echo: true
+  warning: false
+  message: false
+  cache: true
+bibliography: references.bib
+csl: spectrochimica-acta-part-b.csl
+---
+
+<!-- ============================================================
+     SLIDE 2 — MOTIVATION & CONTEXT
+     ============================================================ -->
+
+## Why Gerridae? {background-color="#0B3D91" background-opacity="0.9"}
+
+
+```{r setup}
+#| include: false
+
+library(tidyverse)
+library(gt)
+library(patchwork)
+library(viridis)
+library(scales)
+library(ggridges)
+library(treemapify)
+library(ggtext)
+library(xgboost)
+library(caret)
+
+# ── Presentation palette ──────────────────────────────────────
+pal <- list(
+  ocean   = "#0B3D91",
+  fresh   = "#2E8B57",
+  accent  = "#FF6F00",
+  light   = "#F5F5F5",
+  dark    = "#1A1A2E",
+  grid    = c("#0B3D91", "#2E8B57", "#FF6F00", "#E53935",
+              "#8E24AA", "#00ACC1", "#FFB300", "#43A047")
+)
+
+habitat_colours <- c(
+  "oceanic"    = "#0B3D91",
+  "freshwater" = "#2E8B57"
+)
+
+# ── Global ggplot theme ───────────────────────────────────────
+theme_xfm <- function(base_size = 18) {
+  theme_minimal(base_size = base_size) %+replace%
+    theme(
+      text             = element_text(family = "sans", colour = pal$dark),
+      plot.title       = element_text(face = "bold", size = rel(1.3),
+                                      hjust = 0, margin = margin(b = 10)),
+      plot.subtitle    = element_text(colour = "grey40", hjust = 0,
+                                      margin = margin(b = 15)),
+      panel.grid.minor = element_blank(),
+      panel.grid.major = element_line(colour = "grey90", linewidth = 0.3),
+      legend.position  = "bottom",
+      strip.text       = element_text(face = "bold", size = rel(0.9))
+    )
+}
+theme_set(theme_xfm())
+
+# ── Helper functions ──────────────────────────────────────────
+safe_median <- function(x, ...) stats::median(x, na.rm = TRUE)
+safe_mean   <- function(x, ...) base::mean(x, na.rm = TRUE)
+
+# ── Load and prepare real dataset ─────────────────────────────
+df_all_raw <- read.csv("DATA/xrf_summary_statistics_merged.csv") |>
+  rename(mean_conc = mean)
+
+# Filter: intact only, oceanic vs freshwater only
+df_all <- df_all_raw |>
+  filter(Condition == "intact",
+         Lifestyle %in% c("oceanic", "freshwater")) |>
+  mutate(habitat = if_else(Lifestyle == "oceanic", "Oceanic", "Freshwater"))
+
+all_elements <- sort(unique(df_all$Element))
+all_samples  <- unique(df_all$Sample)
+```
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+### A natural experiment in elemental adaptation
+
+- **Gerridae** (water striders) colonised marine habitats **independently multiple times**
+- Oceanic genus *Halobates* — the **only truly pelagic insects**
+- Freshwater genera (*Metrocoris*, *Ventidius*) occupy chemically distinct niches
+- **Question:** How does habitat chemistry reshape the whole-body elemental fingerprint?
+
+:::
+
+::: {.column width="45%"}
+
+![](img/gerridae_habitat_comparison.png){fig-alt="Side-by-side: oceanic Halobates on wave surface vs freshwater Gerris on pond" width="100%"}
+
+:::
+
+::::
+
+
+
+<!-- ============================================================
+     SLIDE 3 — RESEARCH OBJECTIVES
+     ============================================================ -->
+
+## Research objectives {.smaller}
+
+<br>
+
+::: {.callout-note icon=false}
+## 🎯 Three integrated goals
+
+**1. Map** — Acquire high-resolution synchrotron XFM elemental maps of whole Gerridae specimens from oceanic and freshwater habitats.
+
+**2. Quantify** — Extract robust per-element descriptive statistics and compare distributions across habitats.
+
+**3. Explain** — Train a gradient-boosted classifier (XGBoost) on the elemental profiles and interpret predictions with SHAP values to identify the most discriminative elements.
+:::
+
+<br>
+
+```{r objectives-flow, fig.width=16, fig.height=5}
+#| echo: false
+#| fig-align: center
+
+flow <- tibble(
+  step  = factor(c("Specimen\npreparation", "Synchrotron\nXFM", "Spectral\nfitting", 
+                    "Feature\nextraction", "XGBoost\nclassifier", "SHAP\ninterpretation"),
+                 levels = c("Specimen\npreparation", "Synchrotron\nXFM", "Spectral\nfitting",
+                            "Feature\nextraction", "XGBoost\nclassifier", "SHAP\ninterpretation")),
+  x     = 1:6,
+  col   = c(pal$dark, pal$ocean, pal$ocean, pal$fresh, pal$accent, pal$accent)
+)
+
+ggplot(flow, aes(x, y = 0)) +
+  geom_segment(aes(x = x + 0.42, xend = x + 0.58, y = 0, yend = 0),
+               arrow = arrow(length = unit(0.35, "cm"), type = "closed"),
+               colour = "grey50", linewidth = 1.2,
+               data = flow |> filter(x < 6)) +
+  geom_point(aes(fill = I(col)), shape = 21, size = 52,
+             colour = "grey30", stroke = 1.4) +
+  geom_text(aes(label = step), size = 5.5, colour = "white", fontface = "bold",
+            lineheight = 0.85) +
+  scale_x_continuous(limits = c(0.0, 6.9)) +
+  scale_y_continuous(limits = c(-0.8, 0.8)) +
+  theme_void() +
+  theme(plot.margin = margin(10, 10, 10, 10))
+```
+
+
+
+<!-- ============================================================
+     SLIDE 4 — SPECIMEN OVERVIEW
+     ============================================================ -->
+
+## Specimen collection & preparation
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+### Sampling
+
+```{r specimen-table}
+#| echo: false
+
+df_all |>
+  distinct(Sample, Species, Lifestyle, Location) |>
+  count(Lifestyle, Species, Location, name = "n_specimens") |>
+  arrange(Lifestyle) |>
+  gt() |>
+  cols_label(
+    Lifestyle    = "Habitat",
+    Species      = "Species",
+    Location     = "Location",
+    n_specimens  = "n"
+  ) |>
+  tab_options(
+    table.font.size = px(20),
+    column_labels.font.size = px(22),
+    column_labels.font.weight = "bold"
+  )
+```
+
+<br>
+
+- Specimens preserved in **ethanol → air-dried → mounted on Ultralene**
+- No chemical fixation to avoid elemental contamination
+- Whole-body mounts (dorsal orientation)
+- Only **intact** specimens included (*n* = 13)
+
+:::
+
+::: {.column width="45%"}
+
+![](img/specimen_preparation.png){fig-alt="Photograph of pinned Gerridae specimens on Ultralene film for XFM analysis" width="90%"}
+
+:::
+
+::::
+
+
+
+<!-- ============================================================
+     SLIDE 5 — BEAMLINE & ACQUISITION
+     ============================================================ -->
+
+## Synchrotron XFM acquisition {background-image="img/beamline_schematic.png" background-size="contain" background-opacity="0.12"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+### Beamline parameters
+
+| Parameter | Value |
+|-----------|-------|
+| Facility / Beamline | Australian Synchrotron / XFM |
+| Energy | 18.5 keV |
+| Beam size | 2 × 2 µm² |
+| Step size | 2 µm |
+| Dwell time | ~1–2 ms / pixel |
+| Detector | Maia 384-element |
+| Fitting | GeoPIXE / Dynamic Analysis |
+
+:::
+
+::: {.column width="45%"}
+
+### Detected elements
+
+```{r element-badges, results='asis'}
+#| echo: false
+
+badge_colours <- setNames(
+  rep(c("#E53935","#FF6F00","#FFB300","#43A047","#2E8B57",
+        "#00ACC1","#0B3D91","#8E24AA","#6D4C41","#F4511E",
+        "#546E7A","#795548","#9E9E9E","#607D8B","#3F51B5","#009688"),
+      length.out = length(all_elements)),
+  all_elements
+)
+
+cat('<div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:20px;">\n')
+for (el in all_elements) {
+  cat(sprintf(
+    '<span style="background:%s; color:white; padding:10px 20px; border-radius:8px; font-size:1.3em; font-weight:bold;">%s</span>\n',
+    badge_colours[el], el
+  ))
+}
+cat('</div>\n')
+```
+
+:::
+
+::::
+
+
+
+<!-- ============================================================
+     SLIDE 6 — RAW ELEMENTAL MAPS (oceanic)
+     ============================================================ -->
+
+
+## Elemental maps — oceanic *Halobates* {.smaller}
+
+```{=html}
+<div style="margin-top:0.2em;">
+<img src="img/map_ocean_Cl_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_ocean_Br_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_ocean_Sr_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_ocean_Fe_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_ocean_Zn_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_ocean_S_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" />
+</div>
+```
+
+
+
+
+<!-- ============================================================
+     SLIDE 7 — FRESHWATER MAPS
+     ============================================================ -->
+
+## Elemental maps — freshwater *Gerris*
+
+```{=html}
+<div style="margin-top:0.2em;background:#ffffff;">
+<img src="img/map_fresh_Cl_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_fresh_Ca_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_fresh_Fe_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_fresh_Mn_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_fresh_Zn_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" /><img src="img/map_fresh_S_labelled.png" style="width:32%;max-height:38vh;object-fit:contain;display:inline-block;vertical-align:top;margin:0 0.4% 4px 0.4%;" />
+</div>
+```
+
+
+
+
+
+
+
+
+
+
+<!-- ============================================================
+     SLIDE 8 — DESCRIPTIVE STATISTICS TABLE (side-by-side)
+     ============================================================ -->
+
+## Per-element statistics overview {.smaller .scrollable}
+
+```{r stats-table}
+#| echo: false
+#| fig-align: center
+
+# ── Compute stats for each habitat separately ────────────────
+compute_stats <- function(data, hab_label) {
+  data |>
+    filter(habitat == hab_label) |>
+    group_by(Element) |>
+    summarise(
+      pct_nz  = safe_mean(pct_nz),
+      mean_c  = safe_mean(mean_conc),
+      median_c = safe_mean(median),
+      p99_c   = safe_mean(p99),
+      skew    = safe_mean(p99 / mean_conc),
+      .groups = "drop"
+    )
+}
+
+stats_fw  <- compute_stats(df_all, "Freshwater")
+stats_oc  <- compute_stats(df_all, "Oceanic")
+
+# ── Join side-by-side ─────────────────────────────────────────
+stats_wide <- stats_fw |>
+  rename(fw_pct = pct_nz, fw_mean = mean_c, fw_median = median_c,
+         fw_p99 = p99_c, fw_skew = skew) |>
+  left_join(
+    stats_oc |>
+      rename(oc_pct = pct_nz, oc_mean = mean_c, oc_median = median_c,
+             oc_p99 = p99_c, oc_skew = skew),
+    by = "Element"
+  ) |>
+  mutate(fold_delta = oc_mean / fw_mean) |>
+  arrange(desc(fold_delta))
+
+# ── Build GT table ────────────────────────────────────────────
+stats_wide |>
+  gt() |>
+  cols_label(
+    Element    = "Element",
+    fw_pct     = "% NZ",
+    fw_mean    = "Mean",
+    fw_median  = "Median",
+    fw_p99     = "P99",
+    fw_skew    = "Skew",
+    oc_pct     = "% NZ",
+    oc_mean    = "Mean",
+    oc_median  = "Median",
+    oc_p99     = "P99",
+    oc_skew    = "Skew",
+    fold_delta = "Fold Δ"
+  ) |>
+  tab_spanner(label = md("🌿 **Freshwater** (n = 3)"),
+              columns = starts_with("fw_")) |>
+  tab_spanner(label = md("🌊 **Oceanic** (n = 10)"),
+              columns = starts_with("oc_")) |>
+  fmt_number(columns = c(fw_pct, oc_pct), decimals = 1) |>
+  fmt_number(columns = c(fw_mean, fw_median, fw_p99,
+                         oc_mean, oc_median, oc_p99), decimals = 1) |>
+  fmt_number(columns = c(fw_skew, oc_skew), decimals = 1) |>
+  fmt_number(columns = fold_delta, decimals = 1) |>
+  data_color(
+    columns = fw_median,
+    palette = c("#E8F5E9", "#1B5E20"),
+    domain  = c(0, max(c(stats_wide$fw_median, stats_wide$oc_median), na.rm = TRUE))
+  ) |>
+  data_color(
+    columns = oc_median,
+    palette = c("#E3F2FD", "#0D47A1"),
+    domain  = c(0, max(c(stats_wide$fw_median, stats_wide$oc_median), na.rm = TRUE))
+  ) |>
+  data_color(
+    columns = fold_delta,
+    palette = c("#FFCDD2", "#FFFFFF", "#C8E6C9"),
+    domain  = c(0, max(stats_wide$fold_delta, na.rm = TRUE))
+  ) |>
+  tab_style(
+    style = list(cell_fill(color = "#E8F5E9")),
+    locations = cells_column_spanners(spanners = "🌿 **Freshwater** (n = 3)")
+  ) |>
+  tab_style(
+    style = list(cell_fill(color = "#E3F2FD")),
+    locations = cells_column_spanners(spanners = "🌊 **Oceanic** (n = 10)")
+  ) |>
+  tab_header(
+    title    = md("**Per-element statistics: Freshwater vs Oceanic**"),
+    subtitle = md("Intact specimens only · concentrations in ng cm⁻² · sorted by fold-change")
+  ) |>
+  tab_options(
+    table.font.size        = px(16),
+    column_labels.font.size = px(17),
+    column_labels.font.weight = "bold"
+  )
+```
+
+
+
+<!-- ============================================================
+     SLIDE 9 — RIDGE PLOT
+     ============================================================ -->
+
+## Distribution comparison across habitats
+
+```{r ridge-plot, fig.width=16, fig.height=9}
+#| echo: false
+#| fig-align: center
+
+df_all |>
+  mutate(Element = fct_reorder(Element, mean_conc, .fun = safe_median)) |>
+  ggplot(aes(x = log10(mean_conc + 1), y = Element, fill = Lifestyle)) +
+  geom_density_ridges(alpha = 0.6, scale = 1.6, rel_min_height = 0.01,
+                      colour = "white", linewidth = 0.4) +
+  scale_fill_manual(values = habitat_colours, name = "Habitat") +
+  labs(
+    title    = "Elemental concentration distributions by habitat",
+    subtitle = "Log₁₀ mean areal density (ng cm⁻²) per specimen · intact only",
+    x = expression(log[10]~"(mean concentration + 1)"),
+    y = NULL
+  ) +
+  theme_xfm(base_size = 20) +
+  theme(legend.position = c(0.85, 0.15),
+        legend.text = element_text(size = 14))
+```
+
+
+
+<!-- ============================================================
+     SLIDE 10 — FOLD-CHANGE
+     ============================================================ -->
+
+## Oceanic vs freshwater: fold-change
+
+```{r fold-change, fig.width=16, fig.height=8}
+#| echo: false
+#| fig-align: center
+
+fc_data <- df_all |>
+  group_by(habitat, Element) |>
+  summarise(grp_mean = safe_mean(mean_conc), .groups = "drop") |>
+  pivot_wider(names_from = habitat, values_from = grp_mean) |>
+  mutate(
+    log2_fc   = log2(Oceanic / Freshwater),
+    direction = if_else(log2_fc > 0, "Enriched in oceanic", "Enriched in freshwater"),
+    Element   = fct_reorder(Element, log2_fc)
+  )
+
+ggplot(fc_data, aes(x = log2_fc, y = Element, fill = direction)) +
+  geom_col(width = 0.7, show.legend = TRUE) +
+  geom_vline(xintercept = 0, linewidth = 0.8, colour = pal$dark) +
+  geom_text(aes(label = sprintf("%.1f×", 2^abs(log2_fc)),
+                hjust = if_else(log2_fc > 0, -0.1, 1.1)),
+            size = 4.5, colour = pal$dark) +
+  scale_fill_manual(values = c("Enriched in oceanic" = pal$ocean,
+                                "Enriched in freshwater" = pal$fresh),
+                    name = NULL) +
+  labs(
+    title    = "Log₂ fold-change: oceanic relative to freshwater",
+    subtitle = "Positive = higher in oceanic specimens · intact samples only",
+    x = expression(log[2]~"fold-change"),
+    y = NULL
+  ) +
+  theme_xfm(base_size = 20) +
+  theme(legend.position = "top")
+```
+
+
+
+<!-- ============================================================
+     SLIDE 11 — FEATURE SIZE DISTRIBUTION (P75 THRESHOLDING)
+     ============================================================ -->
+
+## Feature size distribution (P75 thresholding) {.smaller}
+
+```{r feature-size, fig.width=16, fig.height=8}
+#| echo: false
+#| fig-align: center
+
+# ── Panel 1: P99/Mean heterogeneity ratio ─────────────────────
+hetero_data <- df_all |>
+  filter(mean_conc > 0) |>
+  mutate(p99_mean_ratio = p99 / mean_conc) |>
+  group_by(Lifestyle, Element) |>
+  summarise(ratio_mean = safe_mean(p99_mean_ratio), .groups = "drop")
+
+p_hetero <- ggplot(hetero_data,
+                   aes(x = reorder(Element, ratio_mean), y = ratio_mean,
+                       fill = Lifestyle)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6, alpha = 0.85) +
+  scale_fill_manual(values = habitat_colours, name = "Habitat") +
+  coord_flip() +
+  labs(title = "Spatial heterogeneity (P99 / Mean)",
+       subtitle = "Higher = hotspot-concentrated",
+       x = NULL, y = "P99 / Mean ratio") +
+  theme_xfm(base_size = 16) +
+  theme(legend.position = "bottom")
+
+# ── Panel 2: % specimens above P75 ────────────────────────────
+p75_data <- df_all |>
+  group_by(Element) |>
+  mutate(p75_threshold = quantile(mean_conc, 0.75, na.rm = TRUE)) |>
+  ungroup() |>
+  mutate(above_p75 = mean_conc > p75_threshold) |>
+  group_by(Lifestyle, Element) |>
+  summarise(pct_above = safe_mean(above_p75) * 100, .groups = "drop")
+
+p_p75 <- ggplot(p75_data,
+                aes(x = reorder(Element, pct_above), y = pct_above,
+                    fill = Lifestyle)) +
+  geom_col(position = position_dodge(width = 0.7), width = 0.6, alpha = 0.85) +
+  scale_fill_manual(values = habitat_colours, name = "Habitat") +
+  coord_flip() +
+  labs(title = "% specimens above P75 threshold",
+       subtitle = "Cross-habitat 75th percentile",
+       x = NULL, y = "% above P75") +
+  theme_xfm(base_size = 16) +
+  theme(legend.position = "bottom")
+
+(p_hetero | p_p75) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    title = "Concentration heterogeneity and P75 thresholding",
+    subtitle = "Intact specimens only · oceanic vs freshwater",
+    theme = theme_xfm(base_size = 18)
+  ) &
+  theme(legend.position = "bottom")
+```
+
+
+
+<!-- ============================================================
+     SLIDE 12 — MOST IMPACTFUL TRIO
+     ============================================================ -->
+
+## The most impactful trio: Sr, Br, Ca
+
+```{r trio-scatter, fig.width=16, fig.height=7}
+#| echo: false
+#| fig-align: center
+
+trio <- df_all |>
+  filter(Element %in% c("Ca", "Sr", "Br")) |>
+  select(Sample, habitat, Lifestyle, Element, mean_conc) |>
+  pivot_wider(names_from = Element, values_from = mean_conc)
+
+p1 <- ggplot(trio, aes(Sr, Ca, colour = Lifestyle, shape = Lifestyle)) +
+  geom_point(size = 5, alpha = 0.85) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_x_log10(labels = label_comma()) +
+  scale_y_log10(labels = label_comma()) +
+  labs(title = "Sr vs Ca", colour = "Habitat", shape = "Habitat") +
+  theme_xfm(base_size = 16)
+
+p2 <- ggplot(trio, aes(Br, Ca, colour = Lifestyle, shape = Lifestyle)) +
+  geom_point(size = 5, alpha = 0.85) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_x_log10(labels = label_comma()) +
+  scale_y_log10(labels = label_comma()) +
+  labs(title = "Br vs Ca", colour = "Habitat", shape = "Habitat") +
+  theme_xfm(base_size = 16)
+
+p3 <- ggplot(trio, aes(Br, Sr, colour = Lifestyle, shape = Lifestyle)) +
+  geom_point(size = 5, alpha = 0.85) +
+  scale_colour_manual(values = habitat_colours) +
+  scale_x_log10(labels = label_comma()) +
+  scale_y_log10(labels = label_comma()) +
+  labs(title = "Br vs Sr", colour = "Habitat", shape = "Habitat") +
+  theme_xfm(base_size = 16)
+
+(p1 | p2 | p3) +
+  plot_layout(guides = "collect") +
+  plot_annotation(
+    title    = "Pairwise separation using the three most discriminative elements",
+    subtitle = "Mean areal density (ng cm⁻²) — log scale · intact specimens only",
+    theme = theme_xfm(base_size = 20)
+  ) &
+  theme(legend.position = "bottom")
+```
+
+
+
+<!-- ============================================================
+     SLIDE 13 — XGBoost + SHAP
+     ============================================================ -->
+
+## Explainable AI: XGBoost classification {.smaller}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+```{r xgboost-train, fig.width=9, fig.height=8}
+#| echo: false
+
+# ── Prepare data for XGBoost ─────────────────────────────────
+model_data <- df_all |>
+  select(Sample, habitat, Element, mean_conc) |>
+  pivot_wider(names_from = Element, values_from = mean_conc) |>
+  mutate(label = if_else(habitat == "Oceanic", 1L, 0L))
+
+feature_names <- setdiff(names(model_data), c("Sample", "habitat", "label"))
+
+X_mat <- model_data |>
+  select(all_of(feature_names)) |>
+  mutate(across(everything(), ~ log1p(.x))) |>
+  as.matrix()
+
+y_vec <- model_data$label
+
+# ── Balanced sample weights ───────────────────────────────────
+n_oc <- sum(y_vec == 1)
+n_fw <- sum(y_vec == 0)
+w_vec <- if_else(y_vec == 1, 1.0, n_oc / n_fw)
+
+# ── Leave-one-out cross-validation ────────────────────────────
+n <- nrow(X_mat)
+loo_preds <- numeric(n)
+
+for (i in seq_len(n)) {
+  dtrain_i <- xgb.DMatrix(data = X_mat[-i, , drop = FALSE],
+                           label = y_vec[-i], weight = w_vec[-i])
+  dtest_i  <- xgb.DMatrix(data = X_mat[i, , drop = FALSE])
+  
+  model_i <- xgb.train(
+    params = list(
+      objective        = "binary:logistic",
+      eval_metric      = "logloss",
+      max_depth        = 3,
+      eta              = 0.1,
+      alpha            = 1,
+      lambda           = 5,
+      colsample_bytree = 0.7,
+      subsample        = 0.8
+    ),
+    data    = dtrain_i,
+    nrounds = 100,
+    verbose = 0
+  )
+  loo_preds[i] <- predict(model_i, dtest_i)
+}
+
+loo_class <- if_else(loo_preds > 0.5, 1L, 0L)
+loo_accuracy <- safe_mean(loo_class == y_vec) * 100
+
+roc_obj <- pROC::roc(y_vec, loo_preds, quiet = TRUE)
+loo_auc <- as.numeric(pROC::auc(roc_obj))
+
+# ── Train final model on all data ─────────────────────────────
+dtrain_full <- xgb.DMatrix(data = X_mat, label = y_vec, weight = w_vec)
+
+final_model <- xgb.train(
+  params = list(
+    objective        = "binary:logistic",
+    eval_metric      = "logloss",
+    max_depth        = 3,
+    eta              = 0.1,
+    alpha            = 1,
+    lambda           = 5,
+    colsample_bytree = 0.7,
+    subsample        = 0.8
+  ),
+  data    = dtrain_full,
+  nrounds = 100,
+  verbose = 0
+)
+
+# ── Feature importance (gain) ─────────────────────────────────
+imp <- xgb.importance(feature_names = feature_names, model = final_model)
+
+imp |>
+  mutate(Feature = fct_reorder(Feature, Gain)) |>
+  ggplot(aes(x = Gain, y = Feature)) +
+  geom_col(fill = pal$ocean, width = 0.7) +
+  labs(
+    title = "XGBoost feature importance (Gain)",
+    subtitle = "Oceanic vs freshwater · intact specimens",
+    x = "Gain", y = NULL
+  ) +
+  theme_xfm(base_size = 16)
+```
+
+:::
+
+::: {.column width="45%"}
+
+### Model performance
+
+| Metric | Value |
+|--------|-------|
+| Accuracy (LOO-CV) | **`r sprintf("%.0f", loo_accuracy)` %** |
+| AUC-ROC | **`r sprintf("%.2f", loo_auc)`** |
+| Samples | `r n` (10 oceanic, 3 freshwater) |
+| Features | `r length(feature_names)` elements (log₁p) |
+| Weights | Balanced (inverse frequency) |
+
+<br>
+
+### Key insights
+
+- **Ca** dominates gain — strongest single discriminator
+- **Br, Mn** provide complementary separation
+- Model uses only a **subset** of 16 elements
+- Fully interpretable via SHAP (next slide)
+
+:::
+
+::::
+
+
+
+<!-- ============================================================
+     SLIDE 14 — SHAP BEESWARM
+     ============================================================ -->
+
+## SHAP beeswarm: feature-value interactions
+
+```{r shap-beeswarm, fig.width=16, fig.height=9}
+#| echo: false
+#| fig-align: center
+
+# ── TreeSHAP contributions ────────────────────────────────────
+shap_raw <- predict(final_model, dtrain_full, predcontrib = TRUE)
+shap_mat <- shap_raw[, 1:length(feature_names)]
+colnames(shap_mat) <- feature_names
+
+# ── Filter to features with non-zero SHAP ─────────────────────
+shap_abs_mean <- colMeans(abs(shap_mat))
+active_feats  <- names(shap_abs_mean[shap_abs_mean > 1e-6])
+
+if (length(active_feats) == 0) active_feats <- feature_names[1:4]
+
+feat_order <- names(sort(shap_abs_mean[active_feats]))
+
+beeswarm_df <- shap_mat[, active_feats, drop = FALSE] |>
+  as.data.frame() |>
+  mutate(sample_idx = row_number()) |>
+  pivot_longer(-sample_idx, names_to = "Feature", values_to = "shap_value") |>
+  left_join(
+    X_mat[, active_feats, drop = FALSE] |>
+      as.data.frame() |>
+      mutate(sample_idx = row_number()) |>
+      pivot_longer(-sample_idx, names_to = "Feature", values_to = "feature_value"),
+    by = c("sample_idx", "Feature")
+  ) |>
+  group_by(Feature) |>
+  mutate(
+    feat_scaled = (feature_value - min(feature_value)) /
+                  (max(feature_value) - min(feature_value) + 1e-10)
+  ) |>
+  ungroup() |>
+  mutate(Feature = factor(Feature, levels = feat_order))
+
+ggplot(beeswarm_df, aes(x = shap_value, y = Feature, colour = feat_scaled)) +
+  geom_jitter(height = 0.25, width = 0, size = 4.5, alpha = 0.85) +
+  scale_colour_gradient2(low = "#2166AC", mid = "#F7F7F7", high = "#B2182B",
+                         midpoint = 0.5, name = "Feature value\n(scaled)",
+                         labels = c("Low", "", "High"),
+                         breaks = c(0, 0.5, 1)) +
+  geom_vline(xintercept = 0, linewidth = 0.6, colour = "grey40") +
+  labs(
+    title    = "TreeSHAP beeswarm plot",
+    subtitle = "Each dot = one specimen · colour = element concentration · x = impact on prediction",
+    x = "SHAP value (→ Oceanic)",
+    y = NULL
+  ) +
+  theme_xfm(base_size = 18) +
+  theme(legend.position = "right",
+        legend.key.height = unit(2, "cm"))
+```
+
+
+
+<!-- ============================================================
+     SLIDE 15 — BIOLOGICAL INTERPRETATION
+     ============================================================ -->
+
+## Biological interpretation {.smaller .dark background-color="#1A1A2E"}
+
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### 🌊 Oceanic enrichment
+
+* **Sr** (~11× higher) — seawater Sr incorporated into cuticle
+* **Br** (~6× higher) — marine halide bioaccumulation
+* **Ca** (~3× higher) — enhanced cuticular mineralisation
+* **Zn, Se** — moderately elevated, metalloprotein pools
+
+### 🌿 Freshwater enrichment
+
+* **Mn** (~2× higher) — reflects freshwater trace-metal chemistry
+* **Cu** (~1.7× higher) — dietary or environmental source
+* **K** (~1.6× higher) — osmoregulatory differences
+
+:::
+
+::: {.column width="50%"}
+
+### ⚖️ Habitat-invariant elements
+
+* **Se, As, Ni** — fold-change ≈ 1, homeostatic regulation
+* ** Essential trace elements maintained regardless of environment
+
+### 🤖 XAI confirmation
+
+* **XGBoost** selects only 3–4 elements from 16 available
+* **SHAP** confirms monotonic Ca/Br → oceanic, Mn → freshwater
+* **Sparse model** = robust, interpretable signature
+
+:::
+
+::::
+
+::: {.callout-important icon=false}
+## 🔬 Hypothesis for future work
+
+Oceanic *Halobates* show **Sr-enriched cuticular mineralisation** as a potential structural adaptation to wave-dominated habitats. XANES at the Sr K-edge and Ca K-edge could confirm whether Sr substitutes into a carbonate or phosphate lattice.
+:::
+
+
+
+
+
+<!-- ============================================================
+     SLIDE 16 — METHODOLOGICAL CONSIDERATIONS
+     ============================================================ -->
+
+## Methodological considerations
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Strengths
+
+✅ Non-destructive, whole-specimen mapping at µm resolution
+
+✅ Simultaneous multi-element detection (16 elements)
+
+✅ Quantitative areal densities via fundamental parameters
+
+✅ TreeSHAP provides exact, per-specimen explanations
+
+✅ Reproducible pipeline: R + Quarto + version control
+
+✅ Balanced sample weights handle class imbalance
+
+:::
+
+::: {.column width="50%"}
+
+### Limitations & future directions
+
+⚠️ Small sample size (*n* = 13) — expand to more species
+
+⚠️ Class imbalance (10 oceanic vs 3 freshwater)
+
+⚠️ 2D projection — consider confocal XFM for depth info
+
+⚠️ No chemical speciation — XANES at Ca, Sr, Fe edges
+
+⚠️ Hollow specimens excluded — compare preservation states
+
+⚠️ Nymph vs adult differences merit investigation (MIC6–8)
+
+⚠️ Body-size confounding — mass-normalised comparison needed
+
+:::
+
+::::
+
+
+
+<!-- ============================================================
+     SLIDE 17 — ELEMENT EXCLUSION WORKFLOW
+     ============================================================ -->
+
+## Iterative reporting: element exclusion {.smaller}
+
+```{r exclusion-demo, fig.width=16, fig.height=7}
+#| echo: true
+#| code-fold: true
+#| code-summary: "Show exclusion workflow code"
+
+# ── User-selectable exclusion vector ──────────────────────────
+elements_to_exclude <- c("CdL", "PbL")   # ← edit as needed
+
+df_filtered <- df_all |>
+  filter(!Element %in% elements_to_exclude)
+
+fc_filtered <- df_filtered |>
+  group_by(habitat, Element) |>
+  summarise(grp_mean = safe_mean(mean_conc), .groups = "drop") |>
+  pivot_wider(names_from = habitat, values_from = grp_mean) |>
+  mutate(
+    log2_fc   = log2(Oceanic / Freshwater),
+    direction = if_else(log2_fc > 0, "Enriched in oceanic", "Enriched in freshwater"),
+    Element   = fct_reorder(Element, log2_fc)
+  )
+
+ggplot(fc_filtered, aes(x = log2_fc, y = Element, fill = direction)) +
+  geom_col(width = 0.7) +
+  geom_vline(xintercept = 0, linewidth = 0.8, colour = pal$dark) +
+  geom_text(aes(label = sprintf("%.1f×", 2^abs(log2_fc)),
+                hjust = if_else(log2_fc > 0, -0.1, 1.1)),
+            size = 4.5, colour = pal$dark) +
+  scale_fill_manual(values = c("Enriched in oceanic" = pal$ocean,
+                                "Enriched in freshwater" = pal$fresh),
+                    name = NULL) +
+  labs(
+    title    = glue::glue("Fold-change after excluding: {paste(elements_to_exclude, collapse = ', ')}"),
+    subtitle = "Second-iteration analysis — remaining elements only",
+    x = expression(log[2]~"fold-change"),
+    y = NULL
+  ) +
+  theme_xfm(base_size = 20) +
+  theme(legend.position = "top")
+```
+
+
+
+<!-- ============================================================
+     SLIDE 18 — CONCLUSIONS
+     ============================================================ -->
+
+## Conclusions {background-color="#0B3D91" background-opacity="0.85" style="color: #F5F5F5;"}
+
+<br>
+
+### Key findings
+
+:::{style="font-size: 1.15em; line-height: 1.8;"}
+
+**1.** Synchrotron XFM resolves distinct elemental fingerprints between oceanic and freshwater Gerridae at 2 µm resolution across 16 elements.
+
+**2.** Strontium (~11×), bromine (~6×), and calcium (~3×) are the **most discriminative elements** — pointing to enhanced cuticular mineralisation in oceanic species.
+
+**3.** XGBoost with TreeSHAP provides **transparent, interpretable classification** using only 3–4 of 16 available elements.
+
+**4.** Manganese and copper are enriched in freshwater specimens, while selenium and arsenic are habitat-invariant.
+
+**5.** P75 thresholding reveals habitat-dependent spatial organisation of element-rich regions.
+
+:::
+
+
+
+<!-- ============================================================
+     SLIDE 19 — ACKNOWLEDGEMENTS
+     ============================================================ -->
+
+## Acknowledgements {background-image="img/catania_etna.png" background-size="cover" background-opacity="0.2"}
+
+<br>
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Team & collaborators
+
+- Lanna Cheng — Scripps Institution of Oceanography, UC, San Diego
+- Danwei Huang, Jia Jin Marc Chang — Lee Kong Chian Natural History Museum
+- Agnieszka Banas, Mark B. H. Breese — SSLS
+- David Paterson, Daryl Howard, Andrew Langendam and AS User Office
+
+### Funding
+
+- SG-ISAP:  AS2024/C2-00006
+- ANSTO: Proposal ID: 22876
+
+:::
+
+::: {.column width="50%"}
+
+### Facilities
+
+- Australian Synchrotron
+- XFM beamline
+
+### Data & code
+
+🔗 **GitHub:** `krzbanas.github.io/presentation-hub/`
+
+📧 **Contact:** krzysztof@nus.edu.sg
+
+:::
+
+::::
+
+
+::: {style="text-align: center; font-size: 1.4em; font-weight: bold;"}
+Thank you! Questions?
+:::
+
+
+
+<!-- ============================================================
+     BACKUP SLIDE — CORRELATION MATRIX (clustered)
+     ============================================================ -->
+
+## Backup: inter-element correlation {visibility="uncounted"}
+
+```{r correlation, fig.width=12, fig.height=10}
+#| echo: false
+#| fig-align: center
+
+cor_mat <- df_all |>
+  select(Sample, Element, mean_conc) |>
+  pivot_wider(names_from = Element, values_from = mean_conc) |>
+  select(-Sample) |>
+  cor(use = "complete.obs")
+
+# ── Hierarchical clustering for element order ─────────────────
+hc <- hclust(as.dist(1 - cor_mat), method = "ward.D2")
+el_order <- hc$labels[hc$order]
+
+cor_long <- as.data.frame(as.table(cor_mat)) |>
+  rename(el1 = Var1, el2 = Var2, r = Freq) |>
+  mutate(
+    el1 = factor(el1, levels = el_order),
+    el2 = factor(el2, levels = el_order)
+  )
+
+ggplot(cor_long, aes(el1, el2, fill = r)) +
+  geom_tile(colour = "white", linewidth = 0.5) +
+  geom_text(aes(label = sprintf("%.2f", r)), size = 3.5, colour = "black") +
+  scale_fill_gradient2(low = "#2166AC", mid = "white", high = "#B2182B",
+                       midpoint = 0, limits = c(-1, 1), name = "Pearson r") +
+  labs(title = "Inter-element correlation matrix (hierarchically clustered)",
+       subtitle = "Intact specimens · oceanic + freshwater · Ward's D2 linkage",
+       x = NULL, y = NULL) +
+  theme_xfm(base_size = 16) +
+  coord_fixed() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+
+<!-- ============================================================
+     BACKUP SLIDE — ROC CURVE
+     ============================================================ -->
+
+## Backup: ROC curve {visibility="uncounted"}
+
+```{r roc-curve, fig.width=10, fig.height=8}
+#| echo: false
+#| fig-align: center
+
+roc_df <- tibble(
+  fpr = 1 - roc_obj$specificities,
+  tpr = roc_obj$sensitivities
+) |>
+  arrange(fpr, tpr)
+
+ggplot(roc_df, aes(fpr, tpr)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed",
+              colour = "grey60", linewidth = 0.8) +
+  geom_step(colour = pal$accent, linewidth = 1.5) +
+  annotate("text", x = 0.6, y = 0.3,
+           label = sprintf("AUC = %.2f", loo_auc),
+           size = 8, fontface = "bold", colour = pal$accent) +
+  labs(
+    title = "Receiver Operating Characteristic",
+    subtitle = "Leave-one-out cross-validation · balanced weights",
+    x = "False Positive Rate",
+    y = "True Positive Rate"
+  ) +
+  theme_xfm(base_size = 20) +
+  coord_equal(xlim = c(0, 1), ylim = c(0, 1))
+```
+
+
+
+<!-- ============================================================
+     BACKUP SLIDE — TWO-HABITAT BOXPLOTS
+     ============================================================ -->
+
+## Backup: oceanic vs freshwater element comparison {visibility="uncounted"}
+
+```{r two-habitat-boxplot, fig.width=16, fig.height=10}
+#| echo: false
+#| fig-align: center
+
+df_all |>
+  ggplot(aes(x = Lifestyle, y = mean_conc, fill = Lifestyle)) +
+  geom_boxplot(alpha = 0.7, outlier.shape = NA, width = 0.5) +
+  geom_jitter(width = 0.15, size = 2, alpha = 0.6, colour = pal$dark) +
+  facet_wrap(~ Element, scales = "free_y", ncol = 4) +
+  scale_fill_manual(values = habitat_colours, guide = "none") +
+  scale_y_log10(labels = label_comma()) +
+  labs(
+    title    = "Element concentrations: oceanic vs freshwater",
+    subtitle = "Mean areal density (ng cm⁻²) — log scale · intact specimens only · dots = individual specimens",
+    x = NULL, y = "Mean concentration (log scale)"
+  ) +
+  theme_xfm(base_size = 14) +
+  theme(axis.text.x = element_text(size = 11, face = "bold"),
+        strip.text = element_text(size = 12, face = "bold"))
+```
+

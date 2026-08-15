@@ -1,0 +1,710 @@
+---
+title: "Explainable AI for Spectroscopic Data"
+subtitle: "From Black Boxes to Transparent Models in OPTIR and FTIR Spectroscopy"
+author: "Krzysztof Banas"
+date: "21 July 2026"
+categories: [O-PTIR, spectroscopy, XAI]
+image: conclusions_section.png
+format:
+  revealjs:
+    theme: [default, custom.scss]
+    slide-number: true
+    smaller: true
+    chalkboard: false
+    preview-links: auto
+    transition: slide
+    background-transition: fade
+    width: 1280
+    height: 720
+    margin: 0.05
+    center: true
+    hash-type: number
+    footer: "Explainable AI for Spectroscopic Data | OPTIR & FTIR"
+    logo: ""
+    title-slide-attributes:
+      data-background-image: "img/title_background.png"
+      data-background-size: "cover"
+      data-background-opacity: "0.3"
+    auto-animate: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(knitr)
+```
+
+<!-- ============================================================ -->
+<!-- SECTION 1: INTRODUCTION (approx. 5 minutes)                  -->
+<!-- ============================================================ -->
+
+# Introduction {background-color="#2c3e50" background-image="img/intro_section.png" background-size="cover" background-opacity="0.2"}
+
+
+
+## Why This Talk Matters {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="60%"}
+
+- Spectroscopy generates **high-dimensional, information-rich** data
+
+- AI/ML models are increasingly used for **classification, quantification, and identification**
+
+- Regulatory and scientific communities demand **transparency and reproducibility**
+
+- The gap between model performance and model understanding is **widening**
+
+:::
+
+::: {.column width="40%"}
+
+![](img/spectroscopy_ai_convergence.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+## FTIR Spectroscopy — A Brief Primer {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+**Fourier Transform Infrared Spectroscopy**
+
+- Measures absorption of infrared light by molecular bonds
+
+- Produces a spectrum: **absorbance vs. wavenumber** (typically 4000–400 cm⁻¹)
+
+- Functional group identification via characteristic bands (C=O, O–H, N–H, C–H)
+
+- Widely used in **pharmaceuticals, polymers, food science, forensics**
+
+:::
+
+::: {.column width="45%"}
+
+![](img/ftir_schematic.png){fig-align="center" width="95%"}
+
+:::
+
+::::
+
+
+
+## OPTIR Spectroscopy — The New Frontier {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+**Optical Photothermal Infrared Spectroscopy**
+
+- Overcomes the **diffraction limit** of conventional IR microscopy
+
+- Uses a pulsed, tunable IR laser to heat the sample locally
+
+- A visible probe beam detects the **photothermal response**
+
+- Achieves spatial resolution of **~500 nm** (vs. ~10 µm for FTIR microscopy)
+
+- Ideal for **biological tissues, single cells, microplastics, thin films**
+
+:::
+
+::: {.column width="45%"}
+
+![](img/optir_schematic.png){fig-align="center" width="95%"}
+
+:::
+
+::::
+
+
+
+<!-- ============================================================ -->
+<!-- SECTION 2: HISTORY OF AI IN SPECTROSCOPY (approx. 6 minutes) -->
+<!-- ============================================================ -->
+
+# History of AI in Data Evaluation {background-color="#8e44ad" background-image="img/history_section.png" background-size="cover" background-opacity="0.2"}
+
+
+
+## The Timeline of AI in Analytical Science {auto-animate="true"}
+
+```{r}
+#| label: timeline-plot
+#| fig-width: 11
+#| fig-height: 4.5
+#| fig-align: center
+
+library(ggplot2)
+
+timeline_data <- data.frame(
+  year = c(1960, 1975, 1985, 1995, 2005, 2012, 2018, 2023),
+  event = c(
+    "Linear Regression\nfor Calibration",
+    "PCA & Factor\nAnalysis",
+    "PLS Regression\n& PCR",
+    "Artificial Neural\nNetworks (ANNs)",
+    "Support Vector\nMachines (SVMs)",
+    "Deep Learning\nRevolution",
+    "CNNs for Spectral\nClassification",
+    "Transformers &\nFoundation Models"
+  ),
+  era = c("Classical", "Classical", "Chemometrics", "Early ML",
+           "Early ML", "Deep Learning", "Deep Learning", "Deep Learning")
+)
+
+ggplot(timeline_data, aes(x = year, y = 0)) +
+  geom_segment(aes(x = 1955, xend = 2026, y = 0, yend = 0),
+               color = "grey60", linewidth = 1) +
+  geom_point(aes(color = era), size = 5) +
+  geom_text(aes(label = event, y = ifelse(seq_along(year) %% 2 == 0, -0.15, 0.15)),
+            size = 3.2, lineheight = 0.9, fontface = "bold") +
+  geom_segment(aes(xend = year,
+                    y = ifelse(seq_along(year) %% 2 == 0, -0.05, 0.05),
+                    yend = 0),
+               color = "grey40", linetype = "dashed") +
+  scale_color_manual(values = c("Classical" = "#3498db",
+                                 "Chemometrics" = "#2ecc71",
+                                 "Early ML" = "#e67e22",
+                                 "Deep Learning" = "#e74c3c")) +
+  scale_x_continuous(breaks = timeline_data$year) +
+  ylim(-0.35, 0.35) +
+  theme_void() +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 10),
+    axis.text.x = element_text(size = 9, angle = 45, hjust = 1)
+  ) +
+  labs(title = "")
+```
+
+
+
+## Classical Chemometrics Era {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Transparent by Design
+
+- **PCA**: Loadings directly map to spectral features
+
+- **PLS/PCR**: Regression coefficients interpretable as spectral weights
+
+- **HCA**: Dendrograms show grouping logic
+
+- **MCR-ALS**: Recovers pure component spectra
+
+**Key advantage**: Every step is chemically traceable
+
+:::
+
+::: {.column width="50%"}
+
+![](img/chemometrics_loadings.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+## The Deep Learning Shift {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Power at a Cost
+
+- **1D-CNNs** learn hierarchical spectral features automatically
+
+- **Autoencoders** perform nonlinear dimensionality reduction
+
+- **Transfer learning** enables small-dataset performance
+
+- **Transformers** capture long-range spectral dependencies
+
+**The cost**: Internal representations are not human-readable
+
+:::
+
+::: {.column width="50%"}
+
+![](img/deep_learning_blackbox.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+<!-- ============================================================ -->
+<!-- SECTION 3: BLACK BOX PROBLEM (approx. 6 minutes)             -->
+<!-- ============================================================ -->
+
+# Why Black Boxes Are Dangerous {background-color="#c0392b" background-image="img/blackbox_section.png" background-size="cover" background-opacity="0.2"}
+
+
+
+## The Black Box Problem Defined {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="60%"}
+
+A **black box model** is one where:
+
+- Inputs and outputs are known
+
+- The internal decision-making process is **opaque**
+
+- Users cannot determine **why** a specific prediction was made
+
+- There is no way to verify if the model uses **chemically valid** reasoning
+
+### In Spectroscopy This Means:
+
+> *"The model says this is Protein A, but we cannot tell if it used the Amide I band or a baseline artefact to decide."*
+
+:::
+
+::: {.column width="40%"}
+
+![](img/blackbox_diagram.png){fig-align="center" width="85%"}
+
+:::
+
+::::
+
+
+
+## Real-World Risks of Opaque Models {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Documented Failures
+
+1. **Spurious correlations**: Models classifying tissue types based on **sample preparation artefacts** rather than biochemistry
+
+2. **Confounding variables**: Instrument-specific features mistaken for sample differences
+
+3. **Shortcut learning**: Models exploiting **label leakage** in spectral datasets
+
+4. **Distribution shift**: Models failing silently on data from **new instruments or protocols**
+
+:::
+
+::: {.column width="50%"}
+
+![](img/spurious_correlation.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+## The Regulatory Imperative {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="65%"}
+
+### Compliance Demands Transparency
+
+- **EU AI Act (2024)**: High-risk AI systems require explainability
+- **FDA 21 CFR Part 11**: Analytical methods must be validated and understood
+- **ISO/IEC 42001**: AI management systems demand risk assessment
+
+### The Scientific Method Requires It Too
+
+- **Reproducibility** requires understanding what a model does
+- **Peer review** cannot evaluate what it cannot see
+- **Knowledge generation** demands mechanistic insight
+
+:::
+
+::: {.column width="35%"}
+
+![](img/regulatory_framework.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+<!-- ============================================================ -->
+<!-- SECTION 4: EXPLAINABLE AI METHODS (approx. 4 minutes)        -->
+<!-- ============================================================ -->
+
+# Explainable AI: Methods & Tools {background-color="#27ae60" background-image="img/xai_section.png" background-size="cover" background-opacity="0.2"}
+
+
+
+## XAI Taxonomy for Spectroscopy {auto-animate="true"}
+
+```{r}
+#| label: xai-taxonomy
+#| fig-width: 10
+#| fig-height: 5
+#| fig-align: center
+
+library(ggplot2)
+
+xai_data <- data.frame(
+  method = c("SHAP", "LIME", "Grad-CAM", "Integrated\nGradients",
+             "Attention\nWeights", "Partial\nDependence",
+             "Inherently\nInterpretable", "Counterfactual\nExplanations"),
+  type = c("Post-hoc", "Post-hoc", "Post-hoc", "Post-hoc",
+           "Built-in", "Post-hoc", "Built-in", "Post-hoc"),
+  fidelity = c(9, 7, 8, 8.5, 7.5, 6, 10, 7),
+  complexity = c(7, 5, 6, 7, 4, 3, 2, 6)
+)
+
+ggplot(xai_data, aes(x = complexity, y = fidelity,
+                      color = type, label = method)) +
+  geom_point(size = 6, alpha = 0.8) +
+  geom_text(vjust = -1.2, size = 3.5, fontface = "bold") +
+  scale_color_manual(values = c("Post-hoc" = "#e74c3c",
+                                 "Built-in" = "#27ae60")) +
+  xlim(1, 9) + ylim(5, 11) +
+  labs(x = "Implementation Complexity",
+       y = "Explanation Fidelity",
+       color = "Type") +
+  theme_minimal(base_size = 14) +
+  theme(legend.position = "bottom",
+        panel.grid.minor = element_blank())
+```
+
+
+
+## SHAP for Spectral Interpretation {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+### SHapley Additive exPlanations
+
+- Assigns each **wavenumber** a contribution to the prediction
+
+- Based on **coalitional game theory** — fair attribution
+
+- Produces spectral importance maps that align with **chemical knowledge**
+
+- Can reveal if a model focuses on:
+  - ✅ Amide I/II bands (meaningful)
+  - ❌ CO₂ region at 2349 cm⁻¹ (artefact)
+  - ❌ Baseline slope (instrument noise)
+
+
+:::
+
+::: {.column width="45%"}
+
+![](img/shap_spectrum.png){fig-align="center" width="95%"}
+
+:::
+
+::::
+
+
+
+<!-- ============================================================ -->
+<!-- SECTION 5: THREATS & ETHICS (approx. 4 minutes)              -->
+<!-- ============================================================ -->
+
+# Threats & Ethical Considerations {background-color="#d35400" background-image="img/ethics_section.png" background-size="cover" background-opacity="0.2"}
+
+::: {.notes}
+Now let us turn to the broader ethical landscape. Even when we use explainable models, there are significant threats and ethical considerations that the spectroscopy community must confront.
+:::
+
+## Bias in Spectroscopic AI {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="65%"}
+
+### Sources of Bias
+
+- **Dataset bias**: Training sets dominated by specific populations, instruments, or sample preparations
+- **Label bias**: Expert annotations reflecting individual diagnostic tendencies
+- **Measurement bias**: Systematic differences between instruments, labs, or protocols
+- **Selection bias**: Published models trained on curated "clean" datasets that do not represent real-world variability
+
+
+:::
+
+::: {.column width="35%"}
+
+![](img/bias_sources.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+
+## Bias in Spectroscopic AI {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="65%"}
+
+
+### Consequences
+
+- Models that perform well in one lab but **fail in another**
+- Diagnostic models biased toward **specific demographics**
+- Overconfident predictions on **out-of-distribution** samples
+
+:::
+
+::: {.column width="35%"}
+
+![](img/bias_sources.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+
+## Environmental & Societal Costs {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+### Carbon Footprint of AI
+
+- Training a large transformer model can emit **>300 tonnes of CO₂**
+- Hyperparameter searches multiply this by **10–100×**
+
+- Spectroscopic foundation models require **massive computational resources**
+
+### The Proportionality Question
+
+- Is a 2% accuracy improvement worth **weeks of GPU time**?
+- Should we prefer **efficient, interpretable models** when they perform comparably?
+
+:::
+
+::: {.column width="45%"}
+
+![](img/carbon_footprint.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+
+
+## Environmental & Societal Costs {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+### Data Sovereignty & Privacy
+
+- Patient spectral data as **personal health information**
+- Cross-border data flows for cloud-based AI processing
+- Proprietary spectral libraries and **intellectual property** concerns
+
+:::
+
+::: {.column width="45%"}
+
+![](img/carbon_footprint.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+
+
+## Reproducibility & Trust Erosion {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+### The Reproducibility Crisis Meets AI
+
+- Many published spectroscopic AI models **cannot be reproduced**
+
+- Common issues:
+  - Missing preprocessing details
+  - Unreported data splits
+  - No code or model availability
+  - Hardware-dependent results
+
+:::
+
+::: {.column width="45%"}
+
+![](img/reproducibility.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+
+
+## Reproducibility & Trust Erosion {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="55%"}
+
+
+### Trust Erosion
+
+- Clinicians will not adopt tools they **do not understand**
+- Regulators will not approve methods they **cannot audit**
+- Scientists should not publish results they **cannot explain**
+
+### The Path Forward
+
+- **Open models, open data, open code**
+- **Standardised reporting** (model cards, datasheets)
+- **Mandatory XAI** for high-stakes applications
+
+:::
+
+::: {.column width="45%"}
+
+![](img/reproducibility.png){fig-align="center" width="90%"}
+
+:::
+
+::::
+
+
+
+
+<!-- ============================================================ -->
+<!-- SECTION 6: CONCLUSIONS & RECOMMENDATIONS (approx. 2 minutes) -->
+<!-- ============================================================ -->
+
+# Conclusions & Recommendations {background-color="#2c3e50" background-image="img/conclusions_section.png" background-size="cover" background-opacity="0.2"}
+
+## Key Takeaways {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Principles
+
+1. **Accuracy without understanding is insufficient** for scientific applications
+
+2. **Explainability is not optional** — it is a scientific and regulatory requirement
+
+3. **OPTIR and FTIR data** are ideal testbeds for XAI because chemical ground truth exists
+
+4. **Bias, carbon cost, and reproducibility** are ethical imperatives, not afterthoughts
+
+:::
+
+::: {.column width="50%"}
+
+### Recommendations
+
+1. Always apply **at least one XAI method** (SHAP, LIME, or gradient-based)
+
+2. Validate explanations against **known spectral assignments**
+
+3. Report **model cards** with every publication
+
+4. Prefer **interpretable models** when performance is comparable
+
+5. Consider **environmental cost** in model selection
+
+6. Demand **open data and open code**
+
+:::
+
+::::
+
+
+
+## Recommended Resources {auto-animate="true"}
+
+:::: {.columns}
+
+::: {.column width="50%"}
+
+### Books & Reviews
+
+- Molnar, C. — *Interpretable Machine Learning* (2nd ed.)
+- Barker, M. & Rayens, W. — *Chemometrics and Intelligent Laboratory Systems*
+
+### Software
+
+- `SHAP` (Python) — [github.com/shap/shap](https://github.com/shap/shap)
+- `LIME` (Python/R) — [github.com/marcotcr/lime](https://github.com/marcotcr/lime)
+- `iml` (R) — Interpretable Machine Learning package
+- `DALEX` (R/Python) — moDel Agnostic Language for Exploration and eXplanation
+
+:::
+
+::: {.column width="50%"}
+
+### Key Papers
+
+- Ribeiro et al. (2016) — *"Why Should I Trust You?" — LIME*
+- Lundberg & Lee (2017) — *SHAP: A Unified Approach*
+- Baker et al. (2014) — *Using FTIR for clinical biofluids analysis*
+
+
+### Standards
+
+- EU AI Act (2024)
+- ISO/IEC 42001:2023
+- FAIR Data Principles
+
+:::
+
+::::
+
+
+
+## Thank You for Your Attention {background-image="img/thank_you.png" background-size="cover" background-position="center" style="color: white; text-shadow: 3px 3px 10px black;"}
+
+### Questions & Discussion
+
+::: {.r-fit-text}
+📧 krzysztof@nus.edu.sg
+
+🔗 https://krzbanas.github.io/presentation-hub/
+:::
+
+

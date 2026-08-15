@@ -1,0 +1,26 @@
+# R environment (keep renv.lock, ignore the library)
+renv/library/
+renv/staging/
+renv/cellar/
+renv/sandbox/
+
+# R temporary files
+.Rhistory
+.Rdata
+.DS_Store
+Thumbs.db
+
+# Large data files used only for local rendering
+presentations/*/data/*.csv
+presentations/*/data/*.rds
+presentations/*/data/*.xlsx
+
+# Quarto render cache (not needed — _freeze handles this)
+*_cache/
+.Rproj.user
+.positai
+
+/.quarto/
+**/*.quarto_ipynb
+path/to/bigfile.ext
+path/to/bigfile.ext
